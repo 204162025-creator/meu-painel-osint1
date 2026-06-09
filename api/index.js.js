@@ -1,7 +1,7 @@
 const STEAM_API_KEY = 'C42FF616FEEDAAF0DA435BEFEA17E7A7'; 
 
 module.exports = async (req, res) => {
-    // Cabeçalhos obrigatorios para evitar travamentos de CORS
+    // Cabeçalhos obrigatórios para evitar travamentos de CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -116,23 +116,58 @@ module.exports = async (req, res) => {
                         let gameCount = "Oculto/Privado";
                         let recentPlaytime = "Oculto/Privado";
                         let gamesList = [];
-                        let aliasesHistory = ["Perfil privado ou histórico indisponível no cache público"];
+                        let aliasesHistory = [];
 
-                        // Raspagem do histórico de nicks (Sem dependências externas)
+                        // Raspagem do histórico de nicks (Atualizado para a estrutura moderna da Steam)
                         try {
                             const profilePageRes = await fetch(`https://steamcommunity.com/profiles/${steamID}`, {
-                                headers: { 'User-Agent': 'Mozilla/5.0' }
+                                headers: { 
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+                                }
                             });
+
                             if (profilePageRes.ok) {
                                 const htmlText = await profilePageRes.text();
-                                const matches = htmlText.match(/PersonaHistoryNameGroup">([\s\S]*?)<\/div>/g);
-                                if (matches) {
-                                    aliasesHistory = matches.map(m => m.replace(/<[^>]*>/g, '').trim());
-                                } else {
-                                    aliasesHistory = ["Nenhum apelido anterior registrado recentemente ou perfil limpo"];
+                                
+                                // Técnica 1: Tenta capturar o JSON interno injetado no atributo data-old-aliases
+                                const dataAliasesMatch = htmlText.match(/data-old-aliases="([^"]+)"/);
+                                
+                                if (dataAliasesMatch && dataAliasesMatch[1]) {
+                                    const decodedJson = dataAliasesMatch[1]
+                                        .replace(/&quot;/g, '"')
+                                        .replace(/&#39;/g, "'")
+                                        .replace(/&lt;/g, '<')
+                                        .replace(/&gt;/g, '>');
+                                    
+                                    try {
+                                        const aliasesArray = JSON.parse(decodedJson);
+                                        if (Array.isArray(aliasesArray) && aliasesArray.length > 0) {
+                                            aliasesHistory = aliasesArray.map(item => item.newname);
+                                        }
+                                    } catch (jsonErr) {
+                                        console.log("Erro ao decodificar JSON de aliases:", jsonErr.message);
+                                    }
+                                } 
+                                
+                                // Técnica 2 (Fallback): Captura via classes de histórico antigas/alternativas caso existam
+                                if (aliasesHistory.length === 0) {
+                                    const pattern = /<div[^>]*class="[^"]*history_name[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
+                                    const matches = [...htmlText.matchAll(pattern)];
+                                    
+                                    if (matches.length > 0) {
+                                        aliasesHistory = matches.map(m => m[1].replace(/<[^>]*>/g, '').trim()).filter(Boolean);
+                                    }
                                 }
                             }
-                        } catch (err) { console.log(err.message); }
+                        } catch (err) { 
+                            console.log("Erro na raspagem de nicks:", err.message); 
+                        }
+
+                        // Garante uma mensagem amigável se o array de histórico continuar vazio
+                        if (aliasesHistory.length === 0) {
+                            aliasesHistory = ["Nenhum apelido anterior registrado recentemente ou perfil limpo"];
+                        }
 
                         if (isPublic) {
                             const gamesRes = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${STEAM_API_KEY}&steamid=${steamID}&include_appinfo=1&include_played_free_games=1&format=json`);
