@@ -3,151 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel OSINT - Avançado</title>
+    <title>Painel de Inteligência OSINT & Auditoria</title>
     <style>
-        body {
-            background-color: #0d1117;
-            color: #c9d1d9;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        :root {
+            --bg-primary: #090d16;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
         }
-        .container {
-            width: 100%;
-            max-width: 700px;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 25px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        h1 {
-            color: #58a6ff;
-            text-align: center;
-            margin-top: 0;
-        }
-        .input-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #8b949e;
-        }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            color: #fff;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            background: #238636;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background: #2ea44f;
-        }
-        .resultado {
-            margin-top: 20px;
-            background: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 15px;
-            white-space: pre-wrap;
-            font-family: monospace;
-            display: none;
-        }
-        .avatar {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            border: 2px solid #58a6ff;
-            display: none;
-            margin-bottom: 10px;
-        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-main); padding: 2rem; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 1050px; }
+        
+        header { margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+        header h1 { font-size: 1.8rem; display: flex; align-items: center; gap: 10px; color: var(--text-main); }
+        header p { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; }
+
+        .tabs { display: flex; gap: 10px; margin-bottom: 1.5rem; }
+        .tab-btn { background-color: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border-color); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .tab-btn:hover { color: var(--text-main); background-color: var(--bg-tertiary); }
+        .tab-btn.active { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
+
+        .tab-content { display: none; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 2rem; }
+        .tab-content.active { display: block; }
+
+        .input-wrapper { display: flex; gap: 10px; margin-bottom: 1.5rem; }
+        input[type="text"] { flex: 1; background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; color: var(--text-main); font-size: 1rem; outline: none; }
+        
+        button.search-btn { background-color: var(--accent-color); color: white; border: none; padding: 0 24px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+        button.search-btn:hover { background-color: var(--accent-hover); }
+
+        .loading { color: var(--text-muted); font-style: italic; display: none; margin-bottom: 1rem; }
+        .results-panel { display: none; margin-top: 1.5rem; }
+        
+        .sub-tabs { display: flex; gap: 5px; background: var(--bg-primary); padding: 5px; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid var(--border-color); flex-wrap: wrap; }
+        .sub-tab-btn { flex: 1; min-width: 140px; background: transparent; border: none; color: var(--text-muted); padding: 10px; font-size: 0.85rem; font-weight: bold; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
+        .sub-tab-btn.active { background-color: var(--bg-tertiary); color: var(--text-main); }
+
+        .sub-tab-content { display: none; background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: 6px; }
+        .sub-tab-content.active { display: block; }
+
+        .profile-header-block { display: flex; gap: 20px; align-items: center; margin-bottom: 1.5rem; background: var(--bg-secondary); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); }
+        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--accent-color); background-color: var(--bg-tertiary); }
+
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
+        .info-card { background-color: var(--bg-secondary); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; }
+        .info-card span { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+        .info-card p { font-size: 0.95rem; font-weight: 600; }
+
+        .game-list-container { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 5px; }
+        .game-item { display: flex; justify-content: space-between; background: var(--bg-secondary); padding: 10px 15px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; }
+        .game-item span { color: var(--success); font-weight: bold; }
+
+        .footprint-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+        .footprint-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-secondary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); }
+        
+        .osint-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-success { background-color: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .badge-warning { background-color: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .badge-danger { background-color: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .osint-link { color: var(--accent-color); text-decoration: none; font-size: 0.85rem; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>📡 Painel OSINT</h1>
-    
-    <div class="input-group">
-        <label for="type">Selecione o Alvo:</label>
-        <select id="type">
-            <option value="steam">Steam (Histórico de Nicks / ID)</option>
-            <option value="tiktok">TikTok (Investigar Link de Vídeo)</option>
-        </select>
+    <header>
+        <h1>🔍 Sistema de Investigação OSINT & Auditoria</h1>
+        <p>Mapeamento Integrado em Tempo Real com Motores de Credibilidade Gamer.</p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('cnpj-tab')">Auditoria de CNPJ</button>
+        <button class="tab-btn" onclick="switchTab('osint-tab')">Dossiê Completo (OSINT)</button>
     </div>
 
-    <div class="input-group">
-        <label for="target">Insira o ID Steam ou Link do TikTok:</label>
-        <input type="text" id="target" placeholder="Ex: 76561198000000000 ou link do vídeo...">
+    <div id="cnpj-tab" class="tab-content active">
+        <div class="input-wrapper">
+            <input type="text" id="cnpj-input" placeholder="Introduza o CNPJ (Apenas números)">
+            <button class="search-btn" onclick="searchCNPJ()">Buscar CNPJ</button>
+        </div>
+        <div id="cnpj-loading" class="loading">Consultando banco de dados...</div>
+        <div id="cnpj-results" class="results-panel">
+            <div class="info-grid" id="cnpj-grid"></div>
+        </div>
     </div>
 
-    <button onclick="buscarDados()">Investigar Alvo</button>
+    <div id="osint-tab" class="tab-content">
+        <div class="input-wrapper">
+            <input type="text" id="osint-input" placeholder="Digite o nickname, link do TikTok ou ID da Steam">
+            <button class="search-btn" onclick="searchOSINT()">Varredura Total</button>
+        </div>
+        
+        <div id="osint-loading" class="loading">⚙️ Cruzando APIs de Segurança e estruturando parâmetros... Aguarde.</div>
 
-    <div id="resultado-box" class="resultado">
-        <img id="user-avatar" class="avatar" src="" alt="Avatar">
-        <div id="output"></div>
-    </div>
-</div>
+        <div id="osint-results" class="results-panel">
+            
+            <div class="profile-header-block">
+                <img id="dossier-avatar" src="" class="profile-avatar" alt="Avatar">
+                <div>
+                    <h2 id="dossier-username">-</h2>
+                    <p id="dossier-id-sub" style="font-family: monospace; font-size: 0.85rem; color: var(--text-muted);"></p>
+                </div>
+            </div>
 
-<script>
-    async function buscarDados() {
-        const type = document.getElementById('type').value;
-        const target = document.getElementById('target').value;
-        const output = document.getElementById('output');
-        const avatar = document.getElementById('user-avatar');
-        const box = document.getElementById('resultado-box');
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="switchSubTab('sub-geral')">📋 Resumo Geral</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sub-jogos')">🎮 Biblioteca (<span id="count-jogos-aba">0</span>)</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sub-csrep')">🛡️ Reputação & Nicks Antigos</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sub-redes')">🌐 Pegada Digital</button>
+            </div>
 
-        if(!target) {
-            alert('Por favor, digite o alvo!');
-            return;
-        }
-
-        box.style.display = 'block';
-        output.innerText = 'Buscando dados na database...';
-        avatar.style.display = 'none';
-
-        try {
-            // Chama a sua API na Vercel de forma dinâmica
-            const res = await fetch(`/api?type=${type}&target=${encodeURIComponent(target)}`);
-            const data = await res.json();
-
-            if(data.error) {
-                output.innerText = `Erro: ${data.error}`;
-                return;
-            }
-
-            // Se for Steam e tiver foto de perfil, mostra na tela
-            if(data.avatar) {
-                avatar.src = data.avatar;
-                avatar.style.display = 'block';
-            }
-
-            // Organiza o texto bonitinho na tela
-            output.innerText = JSON.stringify(data, null, 2);
-
-        } catch (err) {
-            output.innerText = 'Erro ao conectar com o servidor.';
-        }
-    }
-</script>
-
-</body>
-</html>
+            <div id="sub-geral" class="sub-tab-content active">
+                <div class="info-grid" style="margin-bottom: 1.5rem;">
+                    <div class="info-card"><span>Nome Real / Alvo</span><p id="gen-name">-</p></div>
+                    <div class="info-card"><span>Região</span><p id="gen-location">-</p></div>
+                    <div class="info-card"><span>E-mail</span><p id="gen-email">-</p></div>
+                    <div class="info-card"><span>Privacidade</span><p id="gen-privacy">-</p></div>
+                </div>
+                <div class="info-grid">
+                    <div class="info-card"><span>Criação da Conta</span><p id="gen-steam-date">-</p></div>
+                    <div class="info-card"><span>Projetos (GitHub)</span><p id="gen-gh-repos">-</p></div>
+                    <div class="info-card"><span>Status</span><p id="gen-status">-</p></div>
+                    <div class="info-card"><span>Biografia / Info</span><p id="gen-
