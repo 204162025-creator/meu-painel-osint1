@@ -133,4 +133,208 @@
                     <div class="info-card"><span>Criação da Conta</span><p id="gen-steam-date">-</p></div>
                     <div class="info-card"><span>Projetos (GitHub)</span><p id="gen-gh-repos">-</p></div>
                     <div class="info-card"><span>Status</span><p id="gen-status">-</p></div>
-                    <div class="info-card"><span>Biografia / Info</span><p id="gen-
+                    <div class="info-card"><span>Biografia / Info</span><p id="gen-bio">-</p></div>
+                </div>
+            </div>
+
+            <div id="sub-jogos" class="sub-tab-content">
+                <div style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    <strong>Atividade Recente:</strong> <span id="steam-recent-play">-</span>
+                </div>
+                <div class="game-list-container" id="game-list-grid">
+                    <div class="game-item">Nenhum jogo localizado.</div>
+                </div>
+            </div>
+
+            <div id="sub-csrep" class="sub-tab-content">
+                <h4 style="margin-bottom: 1rem; color: var(--accent-color);">📋 Histórico Real de Codinomes (Nicks Antigos)</h4>
+                <div class="game-list-container" id="steam-aliases-grid" style="margin-bottom: 2rem; max-height: 200px;">
+                    <div class="game-item">Nenhum registro de alteração de nick carregado.</div>
+                </div>
+
+                <h4 style="margin-bottom: 1rem; color: var(--accent-color);">Análise de Credibilidade Externa</h4>
+                <div class="info-grid" style="margin-bottom: 1.5rem;">
+                    <div class="info-card"><span>Verificação de Perfil</span><p id="csrep-points" style="font-size: 1rem; font-weight: bold;">-</p></div>
+                    <div class="info-card"><span>Sincronização</span><p id="csrep-rating" style="font-size: 1rem; font-weight: bold;">-</p></div>
+                    <div class="info-card"><span>Status da Rota</span><p id="csrep-status">-</p></div>
+                </div>
+                <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 8px;">Deseja checar condecorações, trust rating, denúncias detalhadas ou elogios na plataforma oficial?</p>
+                    <a id="csrep-portal-link" href="#" target="_blank" class="osint-link" style="font-size: 1rem; color: #60a5fa;">[Acessar Perfil Completo no CSRep.gg ↗]</a>
+                </div>
+            </div>
+
+            <div id="sub-redes" class="sub-tab-content">
+                <h4 style="margin-bottom: 1rem; color: var(--accent-color);">Varredura Automatizada</h4>
+                <div class="footprint-list" id="footprint-grid" style="margin-bottom: 1.5rem;"></div>
+                
+                <h4 style="margin-bottom: 1rem; color: var(--accent-color);">Pontes Manuais Diretas</h4>
+                <div class="footprint-list">
+                    <div class="footprint-item"><div><strong>Instagram</strong></div><a id="lnk-insta" href="#" target="_blank" class="osint-link">[Abrir Link ↗]</a></div>
+                    <div class="footprint-item"><div><strong>Twitter / X</strong></div><a id="lnk-twitter" href="#" target="_blank" class="osint-link">[Abrir Link ↗]</a></div>
+                    <div class="footprint-item"><div><strong>YouTube</strong></div><a id="lnk-youtube" href="#" target="_blank" class="osint-link">[Abrir Link ↗]</a></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://localhost:3000/api/v1'
+        : '/api/v1'; 
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+        if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    function switchSubTab(subTabId) {
+        document.querySelectorAll('.sub-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.sub-tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(subTabId).classList.add('active');
+        const targetSubBtn = Array.from(document.querySelectorAll('.sub-tab-btn')).find(btn => btn.getAttribute('onclick').includes(subTabId));
+        if (targetSubBtn) targetSubBtn.classList.add('active');
+    }
+
+    async function searchCNPJ() {
+        const cnpj = document.getElementById('cnpj-input').value;
+        const loading = document.getElementById('cnpj-loading');
+        const resultsPanel = document.getElementById('cnpj-results');
+        const grid = document.getElementById('cnpj-grid');
+        if(!cnpj) return alert('Insira um CNPJ.');
+        loading.style.display = 'block'; resultsPanel.style.display = 'none';
+        try {
+            const res = await fetch(`${API_BASE}/corporate/${cnpj}`);
+            const data = await res.json();
+            if(!res.ok) throw new Error(data.error);
+            grid.innerHTML = `
+                <div class="info-card"><span>Razão Social</span><p>${data.legalName}</p></div>
+                <div class="info-card"><span>Nome Fantasia</span><p>${data.tradeName}</p></div>
+                <div class="info-card"><span>Situação</span><p>${data.status}</p></div>
+                <div class="info-card"><span>Fundação</span><p>${data.foundedAt}</p></div>
+            `;
+            resultsPanel.style.display = 'block';
+        } catch(err) { alert(err.message); } finally { loading.style.display = 'none'; }
+    }
+
+    async function searchOSINT() {
+        const username = document.getElementById('osint-input').value;
+        const loading = document.getElementById('osint-loading');
+        const resultsPanel = document.getElementById('osint-results');
+        if(!username) return alert('Digite um nickname, link ou ID.');
+
+        loading.style.display = 'block'; resultsPanel.style.display = 'none';
+
+        try {
+            const res = await fetch(`${API_BASE}/osint/gamer-profile/${encodeURIComponent(username)}`);
+            const data = await res.json();
+            if(!res.ok) throw new Error(data.error);
+
+            // VERIFICAÇÃO SE O ALVO FILTRADO É UM LINK DO TIKTOK
+            if(data.isTikTokLink) {
+                document.getElementById('dossier-username').innerText = "Vínculo de Link TikTok";
+                document.getElementById('dossier-id-sub').innerText = `ID do Vídeo: ${data.tiktok.videoId}`;
+                document.getElementById('dossier-avatar').src = "https://www.scottsdaleweb.com/wp-content/uploads/2021/01/tiktok-logo.png";
+
+                // Injeta os dados coletados nas caixas padrão da aba Geral para não quebrar o layout
+                document.getElementById('gen-name').innerText = `Dono do Vídeo: @${data.tiktok.donoDoVideo}`;
+                document.getElementById('gen-location').innerText = "Metadados do Remetente Extraídos";
+                document.getElementById('gen-email').innerText = `Share UID Amigo: ${data.tiktok.vinculoAmigo.share_uid_remetente}`;
+                document.getElementById('gen-privacy').innerText = "Rastreamento Ativo";
+                document.getElementById('gen-steam-date').innerText = "N/A";
+                document.getElementById('gen-gh-repos').innerText = "N/A";
+                document.getElementById('gen-status').innerText = "Análise Concluída";
+                document.getElementById('gen-bio').innerText = `${data.tiktok.vinculoAmigo.alerta} \n\nTracking Code do Aparelho: ${data.tiktok.vinculoAmigo.device_tracking_code}`;
+
+                // Reseta as outras abas
+                document.getElementById('count-jogos-aba').innerText = "0";
+                document.getElementById('game-list-grid').innerHTML = `<div class="game-item">Módulo focado em link externo. Nenhuma biblioteca gamer aplicável.</div>`;
+                document.getElementById('steam-aliases-grid').innerHTML = `<div class="game-item">Histórico indisponível para links de vídeos.</div>`;
+                document.getElementById('footprint-grid').innerHTML = `<div class="game-item">Rastreio feito exclusivamente na URL expandida: ${data.tiktok.urlExpandida}</div>`;
+                
+                resultsPanel.style.display = 'block';
+                switchSubTab('sub-geral');
+                return;
+            }
+
+            // --- FLUXO PADRÃO SE FOR STEAM / NICKNAME ---
+            document.getElementById('dossier-username').innerText = data.steam.found ? data.steam.personaName : data.username;
+            document.getElementById('dossier-id-sub').innerText = data.steam.found ? `SteamID: ${data.steam.steamID}` : "Identidade baseada em nickname genérico";
+            document.getElementById('dossier-avatar').src = data.steam.found ? data.steam.avatar : "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+
+            // Aba Geral
+            document.getElementById('gen-name').innerText = data.steam.found && data.steam.realName !== "Não exposto" ? data.steam.realName : (data.github.found ? data.github.name : "Não localizado");
+            document.getElementById('gen-location').innerText = data.steam.found && data.steam.country !== "Não informado" ? `Região: ${data.steam.country}` : (data.github.found ? data.github.location : "Não informada");
+            document.getElementById('gen-email').innerText = data.github.found ? data.github.email : "Não exposto publicamente";
+            document.getElementById('gen-privacy').innerText = data.steam.found ? data.steam.privacy : "Sem registro Steam ativo";
+            document.getElementById('gen-steam-date').innerText = data.steam.found ? data.steam.createdAt : "N/A";
+            document.getElementById('gen-gh-repos').innerText = data.github.found ? `${data.github.publicRepos} repositórios` : "Nenhum";
+            document.getElementById('gen-status').innerText = data.steam.found ? data.steam.status : "Desconhecido";
+            document.getElementById('gen-bio').innerText = data.github.found ? data.github.bio : "Sem bio activa";
+
+            // Aba Biblioteca
+            document.getElementById('steam-recent-play').innerText = data.steam.found ? data.steam.recentPlaytime : "Sem registro";
+            const gameGrid = document.getElementById('game-list-grid');
+            if (data.steam.found && data.steam.gamesList.length > 0) {
+                document.getElementById('count-jogos-aba').innerText = data.steam.gamesList.length;
+                gameGrid.innerHTML = data.steam.gamesList.map(game => `
+                    <div class="game-item"><div>🎬 <strong>${game.name}</strong></div><span>${game.playtime}</span></div>
+                `).join('');
+            } else {
+                document.getElementById('count-jogos-aba').innerText = "0";
+                gameGrid.innerHTML = `<div class="game-item">Nenhum jogo localizado. Certifique-se de que o perfil e a biblioteca do alvo na Steam não são privados.</div>`;
+            }
+
+            // PREENCHIMENTO DO HISTÓRICO DE NICKS ANTIGOS DA STEAM
+            const aliasesGrid = document.getElementById('steam-aliases-grid');
+            if (data.steam.found && data.steam.aliasesHistory.length > 0) {
+                aliasesGrid.innerHTML = data.steam.aliasesHistory.map(alias => `
+                    <div class="game-item"><div>👤 Codinome Detectado:</div><strong>${alias}</strong></div>
+                `).join('');
+            } else {
+                aliasesGrid.innerHTML = `<div class="game-item">Nenhum histórico encontrado para este alvo.</div>`;
+            }
+
+            // LINK DO PORTAL FORMATO OFICIAL
+            if (data.steam.found) {
+                document.getElementById('csrep-points').innerText = "Link direto verificado";
+                document.getElementById('csrep-points').style.color = "var(--success)";
+                document.getElementById('csrep-rating').innerText = "Disponível no portal";
+                document.getElementById('csrep-rating').style.color = "var(--success)";
+                document.getElementById('csrep-status').innerText = "🟢 Redirecionamento Oficial Ativo";
+                document.getElementById('csrep-status').className = "osint-badge badge-success";
+                
+                document.getElementById('csrep-portal-link').href = `https://csrep.gg/player/${data.steam.steamID}`;
+            } else {
+                document.getElementById('csrep-points').innerText = "N/A";
+                document.getElementById('csrep-rating').innerText = "N/A";
+                document.getElementById('csrep-status').innerText = "Alvo sem ID Steam correspondente";
+                document.getElementById('csrep-status').className = "osint-badge badge-warning";
+                document.getElementById('csrep-portal-link').href = "https://csrep.gg";
+            }
+
+            // Aba Redes
+            document.getElementById('footprint-grid').innerHTML = data.footprint.map(net => `
+                <div class="footprint-item">
+                    <div><strong>${net.name}</strong></div>
+                    <div><span class="osint-badge ${net.badge}">${net.status}</span> <a href="${net.link}" target="_blank" class="osint-link">[Ver]</a></div>
+                </div>
+            `).join('');
+
+            document.getElementById('lnk-insta').href = data.manualLinks.instagram;
+            document.getElementById('lnk-twitter').href = data.manualLinks.twitterX;
+            document.getElementById('lnk-youtube').href = data.manualLinks.youtube;
+
+            resultsPanel.style.display = 'block';
+            switchSubTab('sub-geral');
+
+        } catch(err) { alert("Erro de comunicação: " + err.message); } finally { loading.style.display = 'none'; }
+    }
+</script>
+</body>
+</html>
