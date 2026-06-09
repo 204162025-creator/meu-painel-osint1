@@ -1,164 +1,236 @@
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios'); // Adicionado para fazer requisições mais robustas de OSINT
-
-const app = express();
 const STEAM_API_KEY = 'C42FF616FEEDAAF0DA435BEFEA17E7A7'; 
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST'] }));
-app.use(express.json());
+module.exports = async (req, res) => {
+    // Cabeçalhos obrigatorios para evitar travamentos de CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-// 1. ROTA DE CNPJ (Mantida intacta)
-app.get('/api/v1/corporate/:cnpj', async (req, res) => {
-    const { cnpj } = req.params;
-    const sanitizedCnpj = cnpj.replace(/\D/g, '');
-    if (sanitizedCnpj.length !== 14) return res.status(400).json({ error: 'Formato de CNPJ inválido.' });
-    try {
-        const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${sanitizedCnpj}`);
-        if (!response.ok) return res.status(response.status).json({ error: 'Não localizado.' });
-        const data = await response.json();
-        res.json({
-            legalName: data.razao_social,
-            tradeName: data.nome_fantasia || 'Não informado',
-            status: data.descricao_situacao_cadastral,
-            foundedAt: data.data_inicio_atividade,
-            address: { street: data.logradouro, city: data.municipio, state: data.uf },
-            partners: data.socios ? data.socios.map(s => ({ name: s.nome, role: s.qualificacao_socio })) : []
-        });
-    } catch (error) { res.status(500).json({ error: 'Erro no servidor.' }); }
-});
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
 
-// 2. ROTA OSINT MASTER (Atualizada com Histórico de Nicks e TikTok Tracker)
-app.get('/api/v1/osint/gamer-profile/:username', async (req, res) => {
-    let { username } = req.params;
-    let cleanUser = username.trim();
+    const { url } = req;
 
-    // --- DETECTOR E RASTREADOR DE LINKS DO TIKTOK ---
-    if (cleanUser.includes('tiktok.com')) {
+    // --- 1. FILTRO DA ROTA DE CNPJ ---
+    if (url.includes('/api/v1/corporate/')) {
+        const cnpj = url.split('/corporate/')[1]?.split('?')[0];
+        if (!cnpj) return res.status(400).json({ error: 'CNPJ não informado.' });
+        
+        const sanitizedCnpj = cnpj.replace(/\D/g, '');
+        if (sanitizedCnpj.length !== 14) return res.status(400).json({ error: 'Formato de CNPJ inválido.' });
+        
         try {
-            // Faz requisição simulando dispositivo móvel para pescar metadados de rastreio de quem gerou o link
-            const tkResponse = await axios.get(cleanUser, {
-                maxRedirects: 5,
-                headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15' }
+            const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${sanitizedCnpj}`);
+            if (!response.ok) return res.status(response.status).json({ error: 'Não localizado.' });
+            const data = await response.json();
+            
+            return res.status(200).json({
+                legalName: data.razao_social,
+                tradeName: data.nome_fantasia || 'Não informado',
+                status: data.descricao_situacao_cadastral,
+                foundedAt: data.data_inicio_atividade,
+                address: { street: data.logradouro, city: data.municipio, state: data.uf },
+                partners: data.socios ? data.socios.map(s => ({ name: s.nome, role: s.qualificacao_socio })) : []
             });
+        } catch (error) { 
+            return res.status(500).json({ error: 'Erro no servidor ao consultar CNPJ.' }); 
+        }
+    }
 
-            const urlFinal = tkResponse.request.res.responseUrl || cleanUser;
-            const urlObj = new URL(urlFinal);
+    // --- 2. FILTRO DA ROTA OSINT MASTER ---
+    if (url.includes('/api/v1/osint/gamer-profile/')) {
+        const param = url.split('/gamer-profile/')[1]?.split('?')[0];
+        if (!param) return res.status(400).json({ error: 'Parâmetro de busca vazio.' });
 
-            // Captura os códigos de identificação do remetente injetados na URL pelo App do TikTok
-            const shareUid = urlObj.searchParams.get('share_uid') || 'Não injetado (Link limpo)';
-            const senderDevice = urlObj.searchParams.get('sender_device') || urlObj.searchParams.get('_r') || 'Não detectado';
+        let username = decodeURIComponent(param).trim();
 
-            return res.json({
-                username: "Modulo_TikTok_OSINT",
-                scanTime: new Date().toLocaleString('pt-BR'),
-                isTikTokLink: true,
-                tiktok: {
-                    urlOriginal: cleanUser,
-                    urlExpandida: urlFinal,
-                    donoDoVideo: urlFinal.split('@')[1]?.split('/')[0] || "Desconhecido",
-                    videoId: urlFinal.split('/video/')[1]?.split('?')[0] || "Não extraído",
-                    vinculoAmigo: {
-                        alerta: "Se o seu amigo copiou este link diretamente de dentro do aplicativo dele, os IDs abaixo pertencem à conta dele.",
-                        share_uid_remetente: shareUid,
-                        device_tracking_code: senderDevice
+        // [MÓDULO TIKTOK] - Rastreamento e Extração de metadados de links
+        if (username.includes('tiktok.com')) {
+            try {
+                const tkResponse = await fetch(username, {
+                    redirect: 'follow',
+                    headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15' }
+                });
+
+                const urlFinal = tkResponse.url || username;
+                const urlObj = new URL(urlFinal);
+
+                const shareUid = urlObj.searchParams.get('share_uid') || 'Não embutido no link';
+                const senderDevice = urlObj.searchParams.get('sender_device') || urlObj.searchParams.get('_r') || 'Não detectado';
+
+                return res.status(200).json({
+                    username: "Modulo_TikTok_OSINT",
+                    scanTime: new Date().toLocaleString('pt-BR'),
+                    isTikTokLink: true,
+                    tiktok: {
+                        urlOriginal: username,
+                        urlExpandida: urlFinal,
+                        donoDoVideo: urlFinal.split('@')[1]?.split('/')[0] || "Desconhecido",
+                        videoId: urlFinal.split('/video/')[1]?.split('?')[0] || "Não extraído",
+                        vinculoAmigo: {
+                            alerta: "Se o seu amigo copiou este link diretamente de dentro do aplicativo dele, os IDs abaixo pertencem à conta dele.",
+                            share_uid_remetente: shareUid,
+                            device_tracking_code: senderDevice
+                        }
                     }
-                }
-            });
-        } catch (err) {
-            return res.status(500).json({ error: 'Erro ao desmembrar metadados do TikTok.', detalhes: err.message });
-        }
-    }
-
-    // --- SEGUIMENTO DO FLUXO NORMAL (STEAM, GITHUB, FOOTPRINT) ---
-    let cleanUserLower = cleanUser.toLowerCase();
-    if (cleanUserLower.includes('steamcommunity.com')) {
-        const match = cleanUserLower.match(/(?:id|profiles)\/([a-z0-9_]+)/i);
-        if (match && match[1]) cleanUserLower = match[1];
-    }
-    cleanUserLower = cleanUserLower.replace('@', '').replace(/\//g, '').trim();
-
-    if (!cleanUserLower) return res.status(400).json({ error: 'Digite um nickname ou ID válido.' });
-
-    try {
-        let steamData = { found: false, gamesList: [], aliasesHistory: [] };
-        let steamID = null;
-
-        if (/^\d+$/.test(cleanUserLower) && cleanUserLower.length >= 16) {
-            steamID = cleanUserLower;
-        } else {
-            try {
-                const resolveRes = await fetch(`https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${STEAM_API_KEY}&vanityurl=${cleanUserLower}`);
-                const resolveData = await resolveRes.json();
-                if (resolveData.response && resolveData.response.success === 1) steamID = resolveData.response.steamid;
-            } catch (e) { console.log(e.message); }
+                });
+            } catch (err) {
+                return res.status(500).json({ error: 'Erro ao desmembrar metadados do TikTok.', detalhes: err.message });
+            }
         }
 
-        if (steamID) {
-            try {
-                const userRes = await fetch(`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${STEAM_API_KEY}&steamids=${steamID}`);
-                const userData = await userRes.json();
+        // [MÓDULO TRADICIONAL] - Steam, GitHub e Footprint
+        let cleanUserLower = username.toLowerCase();
+        if (cleanUserLower.includes('steamcommunity.com')) {
+            const match = cleanUserLower.match(/(?:id|profiles)\/([a-z0-9_]+)/i);
+            if (match && match[1]) cleanUserLower = match[1];
+        }
+        cleanUserLower = cleanUserLower.replace('@', '').replace(/\//g, '').trim();
 
-                if (userData.response && userData.response.players && userData.response.players.length > 0) {
-                    const player = userData.response.players[0];
-                    const isPublic = player.communityvisibilitystate === 3;
+        if (!cleanUserLower) return res.status(400).json({ error: 'Digite um nickname ou ID válido.' });
 
-                    let gameCount = "Oculto/Privado";
-                    let recentPlaytime = "Oculto/Privado";
-                    let gamesList = [];
-                    let aliasesHistory = ["Perfil privado ou histórico indisponível no cache público"];
+        try {
+            let steamData = { found: false, gamesList: [], aliasesHistory: [] };
+            let steamID = null;
 
-                    // RASPAR HISTÓRICO DE NICKS DA STEAM DA PÁGINA PÚBLICA
-                    try {
-                        const profilePage = await axios.get(`https://steamcommunity.com/profiles/${steamID}`, {
-                            headers: { 'User-Agent': 'Mozilla/5.0' }
-                        });
-                        if (profilePage && profilePage.data) {
-                            const matches = profilePage.data.match(/PersonaHistoryNameGroup">([\s\S]*?)<\/div>/g);
-                            if (matches) {
-                                aliasesHistory = matches.map(m => m.replace(/<[^>]*>/g, '').trim());
-                            } else {
-                                aliasesHistory = ["Nenhum apelido anterior registrado recentemente ou perfil limpo"];
+            if (/^\d+$/.test(cleanUserLower) && cleanUserLower.length >= 16) {
+                steamID = cleanUserLower;
+            } else {
+                try {
+                    const resolveRes = await fetch(`https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${STEAM_API_KEY}&vanityurl=${cleanUserLower}`);
+                    const resolveData = await resolveRes.json();
+                    if (resolveData.response && resolveData.response.success === 1) steamID = resolveData.response.steamid;
+                } catch (e) { console.log(e.message); }
+            }
+
+            if (steamID) {
+                try {
+                    const userRes = await fetch(`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${STEAM_API_KEY}&steamids=${steamID}`);
+                    const userData = await userRes.json();
+
+                    if (userData.response && userData.response.players && userData.response.players.length > 0) {
+                        const player = userData.response.players[0];
+                        const isPublic = player.communityvisibilitystate === 3;
+
+                        let gameCount = "Oculto/Privado";
+                        let recentPlaytime = "Oculto/Privado";
+                        let gamesList = [];
+                        let aliasesHistory = ["Perfil privado ou histórico indisponível no cache público"];
+
+                        // Raspagem do histórico de nicks (Sem dependências externas)
+                        try {
+                            const profilePageRes = await fetch(`https://steamcommunity.com/profiles/${steamID}`, {
+                                headers: { 'User-Agent': 'Mozilla/5.0' }
+                            });
+                            if (profilePageRes.ok) {
+                                const htmlText = await profilePageRes.text();
+                                const matches = htmlText.match(/PersonaHistoryNameGroup">([\s\S]*?)<\/div>/g);
+                                if (matches) {
+                                    aliasesHistory = matches.map(m => m.replace(/<[^>]*>/g, '').trim());
+                                } else {
+                                    aliasesHistory = ["Nenhum apelido anterior registrado recentemente ou perfil limpo"];
+                                }
+                            }
+                        } catch (err) { console.log(err.message); }
+
+                        if (isPublic) {
+                            const gamesRes = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${STEAM_API_KEY}&steamid=${steamID}&include_appinfo=1&include_played_free_games=1&format=json`);
+                            const gamesData = await gamesRes.json();
+                            
+                            if (gamesData.response && gamesData.response.games) {
+                                gameCount = `${gamesData.response.game_count} jogos detectados`;
+                                gamesList = gamesData.response.games.map(g => ({
+                                    name: g.name,
+                                    playtime: `${Math.round(g.playtime_forever / 60)} horas jogadas`
+                                }));
+                                const recentHours = gamesData.response.games.reduce((acc, game) => acc + (game.playtime_2weeks || 0), 0);
+                                recentPlaytime = recentHours > 0 ? `${Math.round(recentHours / 60)} horas nas últimas 2 semanas` : "Nenhuma atividade recente";
                             }
                         }
-                    } catch (err) { console.log("Erro ao buscar nicks antigos: " + err.message); }
 
-                    if (isPublic) {
-                        const gamesRes = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${STEAM_API_KEY}&steamid=${steamID}&include_appinfo=1&include_played_free_games=1&format=json`);
-                        const gamesData = await gamesRes.json();
-                        
-                        if (gamesData.response && gamesData.response.games) {
-                            gameCount = `${gamesData.response.game_count} jogos detectados`;
-                            gamesList = gamesData.response.games.map(g => ({
-                                name: g.name,
-                                playtime: `${Math.round(g.playtime_forever / 60)} horas jogadas`
-                            }));
-                            const recentHours = gamesData.response.games.reduce((acc, game) => acc + (game.playtime_2weeks || 0), 0);
-                            recentPlaytime = recentHours > 0 ? `${Math.round(recentHours / 60)} horas nas últimas 2 semanas` : "Nenhuma atividade recente";
-                        }
+                        steamData = {
+                            found: true,
+                            steamID: steamID,
+                            personaName: player.personaname,
+                            realName: player.realname || "Não exposto",
+                            avatar: player.avatarfull,
+                            country: player.loccountrycode || "Não informado",
+                            privacy: isPublic ? "🟢 PERFIL PÚBLICO" : "🔴 PERFIL PRIVADO",
+                            createdAt: player.timecreated ? new Date(player.timecreated * 1000).toLocaleDateString('pt-BR') : "Oculta",
+                            status: player.personastate === 0 ? "Offline" : "Online / Ativo",
+                            gameCount: gameCount,
+                            recentPlaytime: recentPlaytime,
+                            gamesList: gamesList,
+                            aliasesHistory: aliasesHistory,
+                            bioSummary: player.summary || ""
+                        };
                     }
+                } catch (e) { console.log(e.message); }
+            }
 
-                    steamData = {
+            // GITHUB SCAN
+            let githubData = { found: false };
+            try {
+                const ghRes = await fetch(`https://api.github.com/users/${cleanUserLower}`, { headers: { 'User-Agent': 'Node-OSINT-App' } });
+                if (ghRes.ok) {
+                    const gh = await ghRes.json();
+                    githubData = {
                         found: true,
-                        steamID: steamID,
-                        personaName: player.personaname,
-                        realName: player.realname || "Não exposto",
-                        avatar: player.avatarfull,
-                        country: player.loccountrycode || "Não informado",
-                        privacy: isPublic ? "🟢 PERFIL PÚBLICO" : "🔴 PERFIL PRIVADO",
-                        createdAt: player.timecreated ? new Date(player.timecreated * 1000).toLocaleDateString('pt-BR') : "Oculta",
-                        status: player.personastate === 0 ? "Offline" : "Online / Ativo",
-                        gameCount: gameCount,
-                        recentPlaytime: recentPlaytime,
-                        gamesList: gamesList,
-                        aliasesHistory: aliasesHistory, // Adicionado ao retorno do objeto Steam
-                        bioSummary: player.summary || ""
+                        name: gh.name || "Não informado",
+                        bio: gh.bio || "Sem biografia pública",
+                        email: gh.email || "Não exposto",
+                        company: gh.company || "Nenhuma informada",
+                        location: gh.location || "Não informada",
+                        publicRepos: gh.public_repos,
+                        followers: gh.followers,
+                        createdAt: new Date(gh.created_at).toLocaleDateString('pt-BR')
                     };
                 }
             } catch (e) { console.log(e.message); }
-        }
 
-        // GITHUB SCAN (Mantido intacto)
-        let githubData = { found: false };
-        try {
-            const ghRes = await fetch(`https://api.github.com/users/${cleanUserLower}`, { headers: { 'User-Agent': 'Node-OSINT-App' }
+            // FOOTPRINT SCAN
+            const networksToScan = [
+                { name: "Reddit", url: `https://www.reddit.com/user/${cleanUserLower}`, antiPhrases: ["nobody on reddit", "banned", "404"] },
+                { name: "Pinterest", url: `https://www.pinterest.com/${cleanUserLower}/`, antiPhrases: ["resource not found", "404"] },
+                { name: "Twitch", url: `https://twitch.tv/${cleanUserLower}`, antiPhrases: ["não encontrado", "404"] },
+                { name: "SoundCloud", url: `https://soundcloud.com/${cleanUserLower}`, antiPhrases: ["can't find that user", "404"] }
+            ];
+
+            const scanResults = [];
+            for (const net of networksToScan) {
+                try {
+                    const response = await fetch(net.url, { method: 'GET', headers: { 'User-Agent': 'Mozilla/5.0' } });
+                    if (response.status === 200) {
+                        const textHTML = await response.text();
+                        const isFake = net.antiPhrases.some(phrase => textHTML.toLowerCase().includes(phrase));
+                        scanResults.push({ name: net.name, status: isFake ? "NÃO IDENTIFICADO" : "LOCALIZADO", link: net.url, badge: isFake ? "badge-danger" : "badge-success" });
+                    } else {
+                        scanResults.push({ name: net.name, status: "NÃO IDENTIFICADO", link: net.url, badge: "badge-danger" });
+                    }
+                } catch (err) {
+                    scanResults.push({ name: net.name, status: "ANÁLISE REQUERIDA", link: net.url, badge: "badge-warning" });
+                }
+            }
+
+            return res.status(200).json({
+                username: cleanUserLower,
+                scanTime: new Date().toLocaleString('pt-BR'),
+                steam: steamData,
+                github: githubData,
+                footprint: scanResults,
+                manualLinks: {
+                    instagram: `https://instagram.com/${cleanUserLower}`,
+                    twitterX: `https://x.com/${cleanUserLower}`,
+                    youtube: `https://youtube.com/@${cleanUserLower}`
+                }
+            });
+
+        } catch (error) {
+            return res.status(500).json({ error: 'Erro crítico no processamento OSINT.' });
+        }
+    }
+
+    // Caso acesse a raiz ou rota desconhecida
+    return res.status(404).json({ error: 'Rota não encontrada na API.' });
+};
