@@ -3,46 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Inteligência OSINT</title>
+    <title>Painel de Inteligência OSINT & Auditoria</title>
     <style>
         :root {
-            --bg-primary: #090d16; --bg-secondary: #111827; --bg-tertiary: #1f2937;
-            --accent-color: #3b82f6; --text-main: #f3f4f6; --text-muted: #9ca3af;
-            --border-color: #374151; --success: #10b981; --danger: #ef4444; --tiktok: #ee1d52;
+            --bg-primary: #090d16;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1f2937;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --tiktok-color: #ee1d52;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
         body { background-color: var(--bg-primary); color: var(--text-main); padding: 2rem; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 1100px; }
+        .container { width: 100%; max-width: 1050px; }
+        
         header { margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+        header h1 { font-size: 1.8rem; display: flex; align-items: center; gap: 10px; color: var(--text-main); }
+        header p { color: var(--text-muted); font-size: 0.9rem; margin-top: 5px; }
+
         .tabs { display: flex; gap: 10px; margin-bottom: 1.5rem; }
-        .tab-btn { background-color: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border-color); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .tab-btn.active { background-color: var(--accent-color); color: white; }
+        .tab-btn { background-color: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border-color); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .tab-btn:hover { color: var(--text-main); background-color: var(--bg-tertiary); }
+        .tab-btn.active { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
+
         .tab-content { display: none; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 2rem; }
         .tab-content.active { display: block; }
+
         .input-wrapper { display: flex; gap: 10px; margin-bottom: 1.5rem; }
-        input[type="text"] { flex: 1; background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 14px; border-radius: 6px; color: var(--text-main); font-size: 1rem; }
-        .search-btn { background-color: var(--accent-color); color: white; border: none; padding: 0 24px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .loading { display: none; color: var(--text-muted); margin-bottom: 1rem; font-style: italic; }
+        input[type="text"] { flex: 1; background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; color: var(--text-main); font-size: 1rem; outline: none; }
         
-        /* Painéis de Resultados Separados */
-        .panel-gamer, .panel-tiktok { display: none; margin-top: 1.5rem; }
+        button.search-btn { background-color: var(--accent-color); color: white; border: none; padding: 0 24px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+        button.search-btn:hover { background-color: var(--accent-hover); }
+
+        .loading { color: var(--text-muted); font-style: italic; display: none; margin-bottom: 1rem; }
+        .results-panel { display: none; margin-top: 1.5rem; }
         
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-top: 1rem; }
-        .info-card { background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 15px; border-radius: 6px; }
-        .info-card span { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; }
-        .info-card p { font-size: 1rem; font-weight: 600; }
+        .sub-tabs { display: flex; gap: 5px; background: var(--bg-primary); padding: 5px; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid var(--border-color); flex-wrap: wrap; }
+        .sub-tab-btn { flex: 1; min-width: 140px; background: transparent; border: none; color: var(--text-muted); padding: 10px; font-size: 0.85rem; font-weight: bold; cursor: pointer; border-radius: 4px; transition: all 0.2s; }
+        .sub-tab-btn.active { background-color: var(--bg-tertiary); color: var(--text-main); }
+
+        .sub-tab-content { display: none; background-color: var(--bg-primary); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: 6px; }
+        .sub-tab-content.active { display: block; }
+
+        .profile-header-block { display: flex; gap: 20px; align-items: center; margin-bottom: 1.5rem; background: var(--bg-secondary); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); }
+        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--accent-color); background-color: var(--bg-tertiary); }
+
+        /* Customização da Cabeça do TikTok */
+        .tiktok-style-header { border-left: 5px solid var(--tiktok-color) !important; background: linear-gradient(90deg, #111827 0%, #1c1524 100%) !important; }
+        .tiktok-avatar-border { border: 2px solid var(--tiktok-color) !important; }
+
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
+        .info-card { background-color: var(--bg-secondary); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; }
+        .info-card span { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+        .info-card p { font-size: 0.95rem; font-weight: 600; }
+
+        .game-list-container { max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 5px; }
+        .game-item { display: flex; justify-content: space-between; background: var(--bg-secondary); padding: 10px 15px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; }
+        .game-item span { color: var(--success); font-weight: bold; }
+
+        .footprint-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+        .footprint-item { display: flex; justify-content: space-between; align-items: center; background-color: var(--bg-secondary); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); }
         
-        /* Customização da Interface Exclusiva do TikTok */
-        .tiktok-header { background: linear-gradient(90deg, #111827 0%, #1e1b29 100%); border-left: 5px solid var(--tiktok); padding: 20px; border-radius: 6px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 20px; }
-        .tiktok-avatar { width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--tiktok); }
-        .section-title { color: var(--tiktok); font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.5rem; font-weight: bold; border-bottom: 1px solid #312e43; padding-bottom: 5px; }
+        .osint-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-success { background-color: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .badge-warning { background-color: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .badge-danger { background-color: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .osint-link { color: var(--accent-color); text-decoration: none; font-size: 0.85rem; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>🔍 Sistema de Investigação OSINT Multimotor</h1>
+        <h1>🔍 Sistema de Investigação OSINT & Auditoria</h1>
+        <p>Mapeamento Integrado em Tempo Real com Inteligência de Rastreamento de Alvos.</p>
     </header>
 
     <div class="tabs">
@@ -52,129 +93,264 @@
 
     <div id="cnpj-tab" class="tab-content active">
         <div class="input-wrapper">
-            <input type="text" id="cnpj-input" placeholder="Introduza o CNPJ">
-            <button class="search-btn" onclick="searchCNPJ()">Buscar</button>
+            <input type="text" id="cnpj-input" placeholder="Introduza o CNPJ (Apenas números)">
+            <button class="search-btn" onclick="searchCNPJ()">Buscar CNPJ</button>
         </div>
-        <div id="cnpj-results" class="info-grid"></div>
+        <div id="cnpj-loading" class="loading">Consultando banco de dados...</div>
+        <div id="cnpj-results" class="results-panel">
+            <div class="info-grid" id="cnpj-grid"></div>
+        </div>
     </div>
 
     <div id="osint-tab" class="tab-content">
         <div class="input-wrapper">
-            <input type="text" id="osint-input" placeholder="Insira o Nickname ou Link do Vídeo do TikTok">
-            <button class="search-btn" onclick="searchOSINT()">Análise Avançada</button>
+            <input type="text" id="osint-input" placeholder="Digite o nickname, ID Steam ou Link de Vídeo do TikTok">
+            <button class="search-btn" onclick="searchOSINT()">Varredura Total</button>
         </div>
-        <div id="osint-loading" class="loading">Efetuando requisições e quebrando cabeçalhos de rastreamento...</div>
+        
+        <div id="osint-loading" class="loading">⚙️ Analisando parâmetros de cabeçalhos e decodificando tokens... Aguarde.</div>
 
-        <div id="view-gamer" class="panel-gamer">
-            <h3>📋 Relatório de Identidade Gamer</h3>
-            <div class="info-grid">
-                <div class="info-card"><span>Apelido</span><p id="g-nick">-</p></div>
-                <div class="info-card"><span>Nome Real</span><p id="g-name">-</p></div>
-                <div class="info-card"><span>Privacidade</span><p id="g-privacy">-</p></div>
-                <div class="info-card"><span>Status</span><p id="g-status">-</p></div>
-            </div>
-            <h4 style="margin-top:1.5rem;">👤 Histórico de Codinomes Antigos (Steam)</h4>
-            <div id="g-aliases" style="margin-top:0.5rem; display:flex; flex-direction:column; gap:5px;"></div>
-        </div>
-
-        <div id="view-tiktok" class="panel-tiktok">
-            <div class="tiktok-header">
-                <img id="tk-author-avatar" src="" class="tiktok-avatar" alt="Avatar">
+        <div id="osint-results" class="results-panel">
+            
+            <div id="dossier-header-block" class="profile-header-block">
+                <img id="dossier-avatar" src="" class="profile-avatar" alt="Avatar">
                 <div>
-                    <h2 id="tk-author-nick">@username</h2>
-                    <p id="tk-author-name" style="color: var(--text-muted); font-size:0.9rem;">Nome de Exibição</p>
+                    <h2 id="dossier-username">-</h2>
+                    <p id="dossier-id-sub" style="font-family: monospace; font-size: 0.85rem; color: var(--text-muted);"></p>
                 </div>
             </div>
 
-            <div class="section-title">🎬 Dados de Mídia do Vídeo</div>
-            <div class="info-grid">
-                <div class="info-card"><span>ID do Vídeo</span><p id="tk-video-id">-</p></div>
-                <div class="info-card"><span>URL Expandida</span><p id="tk-video-expanded" style="font-size:0.8rem; word-break:break-all;">-</p></div>
-            </div>
+            <div class="sub-tabs" id="sub-tabs-bar">
+                </div>
 
-            <div class="section-title">🚨 Metadados Investigativos do Remetente (Quem enviou o Link)</div>
-            <div class="info-grid">
-                <div class="info-card" style="border: 1px solid rgba(238,29,82,0.3);">
-                    <span>Assinatura Digital (UID Remetente)</span>
-                    <p id="tk-sender-uid" style="color:#f43f5e; font-family:monospace;">-</p>
+            <div id="dynamic-sub-content">
                 </div>
-                <div class="info-card">
-                    <span>Conta Presumida do Remetente</span>
-                    <p id="tk-sender-name" style="color:var(--success);">-</p>
-                </div>
-                <div class="info-card">
-                    <span>Dispositivo / Tipo de Aparelho</span>
-                    <p id="tk-sender-device">-</p>
-                </div>
-                <div class="info-card">
-                    <span>Status da Assinatura</span>
-                    <p id="tk-sender-status">-</p>
-                </div>
-            </div>
+
         </div>
-
     </div>
 </div>
 
 <script>
-    const API_BASE = '/api/v1';
+    const API_BASE = '/api/v1'; 
 
-    function switchTab(id) {
-        document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+        if (targetBtn) targetBtn.classList.add('active');
+    }
+
+    function switchSubTab(subTabId) {
+        document.querySelectorAll('.sub-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.sub-tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(subTabId).classList.add('active');
+        const targetSubBtn = Array.from(document.querySelectorAll('.sub-tab-btn')).find(btn => btn.getAttribute('onclick').includes(subTabId));
+        if (targetSubBtn) targetSubBtn.classList.add('active');
+    }
+
+    async function searchCNPJ() {
+        const cnpj = document.getElementById('cnpj-input').value;
+        const loading = document.getElementById('cnpj-loading');
+        const resultsPanel = document.getElementById('cnpj-results');
+        const grid = document.getElementById('cnpj-grid');
+        if(!cnpj) return alert('Insira um CNPJ.');
+        loading.style.display = 'block'; resultsPanel.style.display = 'none';
+        try {
+            const res = await fetch(`${API_BASE}/corporate/${cnpj}`);
+            const data = await res.json();
+            if(!res.ok) throw new Error(data.error);
+            grid.innerHTML = `
+                <div class="info-card"><span>Razão Social</span><p>${data.legalName}</p></div>
+                <div class="info-card"><span>Nome Fantasia</span><p>${data.tradeName}</p></div>
+                <div class="info-card"><span>Situação</span><p>${data.status}</p></div>
+                <div class="info-card"><span>Fundação</span><p>${data.foundedAt}</p></div>
+            `;
+            resultsPanel.style.display = 'block';
+        } catch(err) { alert(err.message); } finally { loading.style.display = 'none'; }
     }
 
     async function searchOSINT() {
-        const query = document.getElementById('osint-input').value;
-        const loader = document.getElementById('osint-loading');
-        const viewGamer = document.getElementById('view-gamer');
-        const viewTiktok = document.getElementById('view-tiktok');
+        const username = document.getElementById('osint-input').value;
+        const loading = document.getElementById('osint-loading');
+        const resultsPanel = document.getElementById('osint-results');
+        
+        // Elementos do Layout Base
+        const hBlock = document.getElementById('dossier-header-block');
+        const hAvatar = document.getElementById('dossier-avatar');
+        const hUser = document.getElementById('dossier-username');
+        const hSub = document.getElementById('dossier-id-sub');
+        const tabsBar = document.getElementById('sub-tabs-bar');
+        const subContent = document.getElementById('dynamic-sub-content');
 
-        if(!query) return alert('Insira dados para a pesquisa.');
-        loader.style.display = 'block';
-        viewGamer.style.display = 'none';
-        viewTiktok.style.display = 'none';
+        if(!username) return alert('Digite um parâmetro válido para varredura.');
+        loading.style.display = 'block'; resultsPanel.style.display = 'none';
+
+        // Reset de classes customizadas do TikTok para evitar heranças visuais
+        hBlock.classList.remove('tiktok-style-header');
+        hAvatar.classList.remove('tiktok-avatar-border');
 
         try {
-            const res = await fetch(`${API_BASE}/osint/gamer-profile/${encodeURIComponent(query)}`);
+            const res = await fetch(`${API_BASE}/osint/gamer-profile/${encodeURIComponent(username)}`);
             const data = await res.json();
             if(!res.ok) throw new Error(data.error);
 
-            // 🔀 Divisão Mágica da Interface com base no tipo de retorno
-            if (data.isTikTokLink) {
-                // Preenche a Interface Exclusiva do TikTok
-                document.getElementById('tk-author-avatar').src = data.videoData.autor.avatar;
-                document.getElementById('tk-author-nick').innerText = `@${data.videoData.autor.username}`;
-                document.getElementById('tk-author-name').innerText = data.videoData.autor.nome;
-                document.getElementById('tk-video-id').innerText = data.videoData.videoId;
-                document.getElementById('tk-video-expanded').innerText = data.videoData.urlExpandida;
+            // 🎯 CASO SEJA UM LINK DO TIKTOK -> MONTA INTERFACE EXCLUSIVA E COMPLETA DE MÍDIA
+            if(data.isTikTokLink) {
+                hBlock.classList.add('tiktok-style-header');
+                hAvatar.classList.add('tiktok-avatar-border');
                 
-                document.getElementById('tk-sender-uid').innerText = data.remetente.uid || "Nenhum ID embutido";
-                document.getElementById('tk-sender-name').innerText = data.remetente.nomeIdentificado;
-                document.getElementById('tk-sender-device').innerText = data.remetente.dispositivo;
-                document.getElementById('tk-sender-status').innerText = data.remetente.statusAnalise;
+                hUser.innerText = `@${data.tiktok.donoDoVideo}`;
+                hSub.innerText = `ID do Vídeo Monitorado: ${data.tiktok.videoId}`;
+                hAvatar.src = data.tiktok.avatarDono;
 
-                viewTiktok.style.display = 'block'; // Exibe apenas a cara do TikTok
+                // Abas Exclusivas do Fluxo TikTok
+                tabsBar.innerHTML = `
+                    <button class="sub-tab-btn active" onclick="switchSubTab('tk-media')">🎬 Detalhes da Mídia</button>
+                    <button class="sub-tab-btn" onclick="switchSubTab('tk-sender')">🚨 Investigação do Remetente (Quem enviou)</button>
+                `;
+
+                // Conteúdo Completo Sem Cortes das Informações Extraídas
+                subContent.innerHTML = `
+                    <div id="tk-media" class="sub-tab-content active">
+                        <div class="info-grid">
+                            <div class="info-card"><span>Nick do Criador</span><p>@${data.tiktok.donoDoVideo}</p></div>
+                            <div class="info-card"><span>Nome de Exibição</span><p>${data.tiktok.nomeExibicaoDono}</p></div>
+                            <div class="info-card"><span>ID Único da Publicação</span><p>${data.tiktok.videoId}</p></div>
+                            <div class="info-card"><span>Data da Análise</span><p>${data.scanTime}</p></div>
+                        </div>
+                        <div class="info-card" style="margin-top: 15px;">
+                            <span>URL de Origem Expandida</span>
+                            <p style="word-break: break-all; font-family: monospace; font-size: 0.85rem; color: var(--accent-color);">${data.tiktok.urlExpandida}</p>
+                        </div>
+                    </div>
+
+                    <div id="tk-sender" class="sub-tab-content">
+                        <div style="background: rgba(238, 29, 82, 0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(238,29,82,0.2); margin-bottom: 1.5rem;">
+                            <p style="font-size: 0.9rem; color: var(--text-muted);">
+                                <strong>Assinatura Digital de Compartilhamento:</strong> Se a conta de destino gerou este token copiando o link de dentro do aplicativo móvel, as informações coletadas expõem diretamente a identidade e o dispositivo do remetente.
+                            </p>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-card" style="border: 1px solid rgba(238, 29, 82, 0.3);">
+                                <span>Assinatura Digital (share_uid)</span>
+                                <p style="font-family: monospace; color: var(--tiktok-color);">${data.tiktok.vinculoAmigo.share_uid_remetente}</p>
+                            </div>
+                            <div class="info-card">
+                                <span>Dispositivo Rastreador</span>
+                                <p>${data.tiktok.vinculoAmigo.device_tracking_code}</p>
+                            </div>
+                            <div class="info-card">
+                                <span>Plataforma Emissora</span>
+                                <p>${data.tiktok.vinculoAmigo.plataformaOrigem}</p>
+                            </div>
+                            <div class="info-card">
+                                <span>Status da Varredura</span>
+                                <p style="color: var(--success); font-weight: bold;">${data.tiktok.vinculoAmigo.statusAnalise}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
             } else {
-                // Preenche a Interface Regular Gamer
-                if(data.steam.found) {
-                    document.getElementById('g-nick').innerText = data.steam.personaName;
-                    document.getElementById('g-name').innerText = data.steam.realName;
-                    document.getElementById('g-privacy').innerText = data.steam.privacy;
-                    document.getElementById('g-status').innerText = data.steam.status;
-                    
-                    document.getElementById('g-aliases').innerHTML = data.steam.aliasesHistory.map(a => `
-                        <div style="background:var(--bg-primary); padding:10px; border-radius:4px; border:1px solid var(--border-color)">👤 ${a}</div>
+                // 🎯 CASO SEJA PROFILE TRADICIONAL -> MONTA INTERFACE COMPLETA DE GAMER (STEAM / REDES)
+                hUser.innerText = data.steam.found ? data.steam.personaName : data.username;
+                hSub.innerText = data.steam.found ? `SteamID64: ${data.steam.steamID}` : "Identidade baseada em nickname";
+                hAvatar.src = data.steam.found ? data.steam.avatar : "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
+
+                tabsBar.innerHTML = `
+                    <button class="sub-tab-btn active" onclick="switchSubTab('sub-geral')">📋 Resumo Geral</button>
+                    <button class="sub-tab-btn" onclick="switchSubTab('sub-jogos')">🎮 Biblioteca (<span id="count-jogos-aba">0</span>)</button>
+                    <button class="sub-tab-btn" onclick="switchSubTab('sub-csrep')">🛡️ Nicks Antigos & Reputação</button>
+                    <button class="sub-tab-btn" onclick="switchSubTab('sub-redes')">🌐 Pegada Digital</button>
+                `;
+
+                subContent.innerHTML = `
+                    <div id="sub-geral" class="sub-tab-content active">
+                        <div class="info-grid" style="margin-bottom: 1.5rem;">
+                            <div class="info-card"><span>Nome Real / Alvo</span><p>${data.steam.found ? data.steam.realName : (data.github.found ? data.github.name : "Não exposto")}</p></div>
+                            <div class="info-card"><span>Região</span><p>${data.steam.found ? data.steam.country : (data.github.found ? data.github.location : "Não informada")}</p></div>
+                            <div class="info-card"><span>E-mail</span><p>${data.github.found && data.github.email ? data.github.email : "Não localizado em fontes abertas"}</p></div>
+                            <div class="info-card"><span>Privacidade</span><p>${data.steam.found ? data.steam.privacy : "N/A"}</p></div>
+                        </div>
+                        <div class="info-grid">
+                            <div class="info-card"><span>Criação da Conta</span><p>${data.steam.found ? data.steam.createdAt : "N/A"}</p></div>
+                            <div class="info-card"><span>Projetos (GitHub)</span><p>${data.github.found ? `${data.github.publicRepos} repositórios` : "Nenhum"}</p></div>
+                            <div class="info-card"><span>Status</span><p>${data.steam.found ? data.steam.status : "Desconhecido"}</p></div>
+                            <div class="info-card"><span>Biografia</span><p>${data.github.found ? data.github.bio : "Sem registro público"}</p></div>
+                        </div>
+                    </div>
+
+                    <div id="sub-jogos" class="sub-tab-content">
+                        <div style="margin-bottom: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                            <strong>Atividade Coletada:</strong> <span>${data.steam.found ? data.steam.recentPlaytime : "Sem registro público"}</span>
+                        </div>
+                        <div class="game-list-container" id="game-list-grid"></div>
+                    </div>
+
+                    <div id="sub-csrep" class="sub-tab-content">
+                        <h4 style="margin-bottom: 1rem; color: var(--accent-color);">📋 Histórico Completo de Nicks Antigos</h4>
+                        <div class="game-list-container" id="steam-aliases-grid" style="margin-bottom: 2rem; max-height: 250px;"></div>
+
+                        <h4 style="margin-bottom: 1rem; color: var(--accent-color);">Análise de Credibilidade Externa</h4>
+                        <div class="info-grid" style="margin-bottom: 1.5rem;">
+                            <div class="info-card"><span>Verificação</span><p style="color: var(--success);">Link verificado</p></div>
+                            <div class="info-card"><span>Sincronização</span><p style="color: var(--success);">Disponível no Portal</p></div>
+                        </div>
+                        <div style="background: var(--bg-secondary); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color);">
+                            <a id="csrep-portal-link" href="${data.steam.found ? `https://csrep.gg/player/${data.steam.steamID}` : 'https://csrep.gg'}" target="_blank" class="osint-link">[Acessar Reputação no CSRep.gg ↗]</a>
+                        </div>
+                    </div>
+
+                    <div id="sub-redes" class="sub-tab-content">
+                        <h4 style="margin-bottom: 1rem; color: var(--accent-color);">Varredura de Pegada Digital Automatizada</h4>
+                        <div class="footprint-list" id="footprint-grid" style="margin-bottom: 1.5rem;"></div>
+                        
+                        <h4 style="margin-bottom: 1rem; color: var(--accent-color);">Pontes Manuais Diretas</h4>
+                        <div class="footprint-list">
+                            <div class="footprint-item"><div><strong>Instagram</strong></div><a href="${data.manualLinks.instagram}" target="_blank" class="osint-link">[Abrir Link ↗]</a></div>
+                            <div class="footprint-item"><div><strong>Twitter / X</strong></div><a href="${data.manualLinks.twitterX}" target="_blank" class="osint-link">[Abrir Link ↗]</a></div>
+                            <div class="footprint-item"><div><strong>YouTube</strong></div><a href="${data.manualLinks.youtube}" target="_blank" class="osint-link">[Abrir Link ↗]</a></div>
+                        </div>
+                    </div>
+                `;
+
+                // Populando listas internas de Games
+                const gameGrid = document.getElementById('game-list-grid');
+                if (data.steam.found && data.steam.gamesList.length > 0) {
+                    document.getElementById('count-jogos-aba').innerText = data.steam.gamesList.length;
+                    gameGrid.innerHTML = data.steam.gamesList.map(game => `
+                        <div class="game-item"><div>🎬 <strong>${game.name}</strong></div><span>${game.playtime}</span></div>
                     `).join('');
                 } else {
-                    alert('Nenhum Perfil Gamer estruturado foi retornado para este nickname.');
+                    gameGrid.innerHTML = `<div class="game-item">Nenhum jogo localizado ou biblioteca privada.</div>`;
                 }
-                viewGamer.style.display = 'block'; // Exibe apenas o painel de perfis
+
+                // Populando a lista de Nicks Antigos da Steam
+                const aliasesGrid = document.getElementById('steam-aliases-grid');
+                if (data.steam.found && data.steam.aliasesHistory.length > 0) {
+                    aliasesGrid.innerHTML = data.steam.aliasesHistory.map(alias => `
+                        <div class="game-item"><div>👤 Codinome Utilizado:</div><strong>${alias}</strong></div>
+                    `).join('');
+                } else {
+                    aliasesGrid.innerHTML = `<div class="game-item">Nenhum registro público de alteração de nick localizado para este ID.</div>`;
+                }
+
+                // Populando a Pegada Digital (Footprint)
+                document.getElementById('footprint-grid').innerHTML = data.footprint.map(net => `
+                    <div class="footprint-item">
+                        <div><strong>${net.name}</strong></div>
+                        <div><span class="osint-badge ${net.badge}">${net.status}</span> <a href="${net.link}" target="_blank" class="osint-link">[Ver]</a></div>
+                    </div>
+                `).join('');
             }
-        } catch (err) {
-            alert('Erro: ' + err.message);
-        } finally {
-            loader.style.display = 'none';
+
+            resultsPanel.style.display = 'block';
+
+        } catch(err) { 
+            alert("Erro na varredura: " + err.message); 
+        } finally { 
+            loading.style.display = 'none'; 
         }
     }
 </script>
