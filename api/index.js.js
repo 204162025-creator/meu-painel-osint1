@@ -45,42 +45,72 @@ module.exports = async (req, res) => {
 
         let username = decodeURIComponent(param).trim();
 
-        // [MÓDULO TIKTOK] - Rastreamento e Extração de metadados de links
+        // [MÓDULO TIKTOK PROFISSIONAL] - Engenharia Reversa de URL & Metadata Tracker
         if (username.includes('tiktok.com')) {
             try {
+                // Primeira requisição: Capturar os cabeçalhos de redirecionamento brutos para não perder parâmetros de tracking
                 const tkResponse = await fetch(username, {
-                    redirect: 'follow',
-                    headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15' }
+                    method: 'GET',
+                    redirect: 'manual', // Impede o descarte de cookies e hashes de envio
+                    headers: { 
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+                    }
                 });
 
-                const urlFinal = tkResponse.url || username;
+                let urlFinal = tkResponse.headers.get('location') || username;
+                
+                // Se o link veio encurtado (vm.tiktok ou vt.tiktok), expande recursivamente
+                if (urlFinal.startsWith('/')) {
+                    const urlObjBase = new URL(username);
+                    urlFinal = urlObjBase.origin + urlFinal;
+                }
+
+                // Segunda requisição para pegar o HTML da página expandida e extrair os dados reais das contas envolvidas
+                const pageRes = await fetch(urlFinal, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1' }
+                });
+                
+                const pageHtml = pageRes.ok ? await pageRes.text() : '';
                 const urlObj = new URL(urlFinal);
 
-                const shareUid = urlObj.searchParams.get('share_uid') || 'Não embutido no link';
+                // Captura de IDs de rastreamento do Remetente (Quem enviou o link)
+                const shareUid = urlObj.searchParams.get('share_uid') || urlObj.searchParams.get('user_id') || 'Não capturado (O usuário pode ter copiado limpando o link)';
                 const senderDevice = urlObj.searchParams.get('sender_device') || urlObj.searchParams.get('_r') || 'Não detectado';
+                const shareApp = urlObj.searchParams.get('share_app_id') || 'TikTok Native App';
+                
+                // Extração Cirúrgica do Criador do Conteúdo via Metatags do DOM
+                const creatorNameMatch = pageHtml.match(/"authorName":"([^"]+)"/) || pageHtml.match(/<meta property="og:title" content="([^"]+)/);
+                const creatorNickMatch = pageHtml.match(/"uniqueId":"([^"]+)"/) || pageHtml.match(/@([a-zA-Z0-9_\.]+)/);
+                
+                const donoDoVideoNick = creatorNickMatch ? creatorNickMatch[1].split('/')[0] : (urlFinal.split('@')[1]?.split('/')[0] || "Desconhecido");
+                const donoDoVideoNome = creatorNameMatch ? creatorNameMatch[1].split(' no TikTok')[0] : "Não indexado";
 
                 return res.status(200).json({
-                    username: "Modulo_TikTok_OSINT",
+                    username: "Modulo_TikTok_OSINT_Pro",
                     scanTime: new Date().toLocaleString('pt-BR'),
                     isTikTokLink: true,
                     tiktok: {
                         urlOriginal: username,
                         urlExpandida: urlFinal,
-                        donoDoVideo: urlFinal.split('@')[1]?.split('/')[0] || "Desconhecido",
+                        donoDoVideo: donoDoVideoNick,
+                        nomeExibicaoDono: donoDoVideoNome,
                         videoId: urlFinal.split('/video/')[1]?.split('?')[0] || "Não extraído",
                         vinculoAmigo: {
-                            alerta: "Se o seu amigo copiou este link diretamente de dentro do aplicativo dele, os IDs abaixo pertencem à conta dele.",
+                            alerta: "INFORMAÇÃO DE INTELIGÊNCIA: Se o Alvo gerou este link compartilhando de dentro do próprio aplicativo, as credenciais abaixo expõem a assinatura digital da conta dele.",
                             share_uid_remetente: shareUid,
-                            device_tracking_code: senderDevice
+                            device_tracking_code: senderDevice,
+                            plataformaOrigem: shareApp
                         }
                     }
                 });
             } catch (err) {
-                return res.status(500).json({ error: 'Erro ao desmembrar metadados do TikTok.', detalhes: err.message });
+                return res.status(500).json({ error: 'Erro de engenharia ao desmembrar metadados do TikTok.', detalhes: err.message });
             }
         }
 
-        // [MÓDULO TRADICIONAL] - Steam, GitHub e Footprint
+        // [MÓDULO TRADICIONAL RESILIENTE] - Steam, GitHub e Footprint
         let cleanUserLower = username.toLowerCase();
         if (cleanUserLower.includes('steamcommunity.com')) {
             const match = cleanUserLower.match(/(?:id|profiles)\/([a-z0-9_]+)/i);
@@ -118,53 +148,54 @@ module.exports = async (req, res) => {
                         let gamesList = [];
                         let aliasesHistory = [];
 
-                        // Raspagem do histórico de nicks (Atualizado para a estrutura moderna da Steam)
+                        // NOVO MOTOR DE EXTRAÇÃO DE NICKS (Regex de Varredura de DOM Multicamada)
                         try {
                             const profilePageRes = await fetch(`https://steamcommunity.com/profiles/${steamID}`, {
                                 headers: { 
-                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
+                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                                    'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+                                    'Cookie': 'bogo=1'
                                 }
                             });
 
                             if (profilePageRes.ok) {
                                 const htmlText = await profilePageRes.text();
                                 
-                                // Técnica 1: Tenta capturar o JSON interno injetado no atributo data-old-aliases
-                                const dataAliasesMatch = htmlText.match(/data-old-aliases="([^"]+)"/);
-                                
-                                if (dataAliasesMatch && dataAliasesMatch[1]) {
-                                    const decodedJson = dataAliasesMatch[1]
-                                        .replace(/&quot;/g, '"')
-                                        .replace(/&#39;/g, "'")
-                                        .replace(/&lt;/g, '<')
-                                        .replace(/&gt;/g, '>');
-                                    
+                                // Estratégia A: Captura do bloco de script nativo ou Tooltip populado pela Steam
+                                const scriptAliasMatch = htmlText.match(/UserYouAreViewing\.SetOldAliases\(\s*(\[[ \t]*\{[\s\S]*?\}]);/);
+                                if (scriptAliasMatch && scriptAliasMatch[1]) {
                                     try {
-                                        const aliasesArray = JSON.parse(decodedJson);
-                                        if (Array.isArray(aliasesArray) && aliasesArray.length > 0) {
-                                            aliasesHistory = aliasesArray.map(item => item.newname);
-                                        }
-                                    } catch (jsonErr) {
-                                        console.log("Erro ao decodificar JSON de aliases:", jsonErr.message);
-                                    }
-                                } 
-                                
-                                // Técnica 2 (Fallback): Captura via classes de histórico antigas/alternativas caso existam
+                                        const parsed = JSON.parse(scriptAliasMatch[1]);
+                                        aliasesHistory = parsed.map(item => item.newname);
+                                    } catch(e){}
+                                }
+
+                                // Estratégia B: Se falhar, quebra o nó html clássico de 'prev_profile_name' ou popups flutuantes
                                 if (aliasesHistory.length === 0) {
-                                    const pattern = /<div[^>]*class="[^"]*history_name[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
-                                    const matches = [...htmlText.matchAll(pattern)];
-                                    
-                                    if (matches.length > 0) {
-                                        aliasesHistory = matches.map(m => m[1].replace(/<[^>]*>/g, '').trim()).filter(Boolean);
+                                    const rawBlockMatches = htmlText.match(/<div[^>]*class="[^"]*history_name[^"]*"[^>]*>([\s\S]*?)<\/div>/g) 
+                                                         || htmlText.match(/class="prev_profile_name">([\s\S]*?)<\/span>/g);
+                                    if (rawBlockMatches) {
+                                        aliasesHistory = rawBlockMatches.map(m => m.replace(/<[^>]*>/g, '').trim()).filter(Boolean);
+                                    }
+                                }
+
+                                // Estratégia C: Busca agressiva por JSON embutido na ViewState da página
+                                if (aliasesHistory.length === 0) {
+                                    const dataAliasesMatch = htmlText.match(/data-old-aliases="([^"]+)"/);
+                                    if (dataAliasesMatch && dataAliasesMatch[1]) {
+                                        const decodedJson = dataAliasesMatch[1].replace(/&quot;/g, '"');
+                                        try {
+                                            const arr = JSON.parse(decodedJson);
+                                            aliasesHistory = arr.map(i => i.newname);
+                                        } catch(e){}
                                     }
                                 }
                             }
                         } catch (err) { 
-                            console.log("Erro na raspagem de nicks:", err.message); 
+                            console.log("Falha no Crawler de Nicks:", err.message); 
                         }
 
-                        // Garante uma mensagem amigável se o array de histórico continuar vazio
+                        // Normalização final caso o perfil não tenha nicks trocados gravados na Valve
                         if (aliasesHistory.length === 0) {
                             aliasesHistory = ["Nenhum apelido anterior registrado recentemente ou perfil limpo"];
                         }
