@@ -1,23 +1,30 @@
 const STEAM_API_KEY = 'C42FF616FEEDAAF0DA435BEFEA17E7A7'; 
 
 module.exports = async (req, res) => {
+    // Cabeçalhos obrigatórios para evitar travamentos de CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
     const { url } = req;
 
-    // --- 1. ROTA DE CNPJ ---
+    // --- 1. FILTRO DA ROTA DE CNPJ ---
     if (url.includes('/api/v1/corporate/')) {
         const cnpj = url.split('/corporate/')[1]?.split('?')[0];
         if (!cnpj) return res.status(400).json({ error: 'CNPJ não informado.' });
+        
         const sanitizedCnpj = cnpj.replace(/\D/g, '');
+        if (sanitizedCnpj.length !== 14) return res.status(400).json({ error: 'Formato de CNPJ inválido.' });
         
         try {
             const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${sanitizedCnpj}`);
             if (!response.ok) return res.status(response.status).json({ error: 'Não localizado.' });
             const data = await response.json();
+            
             return res.status(200).json({
                 legalName: data.razao_social,
                 tradeName: data.nome_fantasia || 'Não informado',
@@ -26,29 +33,33 @@ module.exports = async (req, res) => {
                 address: { street: data.logradouro, city: data.municipio, state: data.uf },
                 partners: data.socios ? data.socios.map(s => ({ name: s.nome, role: s.qualificacao_socio })) : []
             });
-        } catch (error) { return res.status(500).json({ error: 'Erro ao consultar CNPJ.' }); }
+        } catch (error) { 
+            return res.status(500).json({ error: 'Erro no servidor ao consultar CNPJ.' }); 
+        }
     }
 
-    // --- 2. ROTA OSINT MASTER ---
+    // --- 2. FILTRO DA ROTA OSINT MASTER ---
     if (url.includes('/api/v1/osint/gamer-profile/')) {
         const param = url.split('/gamer-profile/')[1]?.split('?')[0];
-        if (!param) return res.status(400).json({ error: 'Parâmetro vazio.' });
+        if (!param) return res.status(400).json({ error: 'Parâmetro de busca vazio.' });
 
         let username = decodeURIComponent(param).trim();
 
-        // [MÓDULO TIKTOK EXCLUSIVO]
+        // [MÓDULO TIKTOK EXCLUSIVO] - Extração Avançada de Metadados de Link e Remetente
         if (username.includes('tiktok.com')) {
             try {
-                // Resolve links encurtados mantendo cookies simulados
                 const tkResponse = await fetch(username, {
                     method: 'GET',
-                    redirect: 'manual',
+                    redirect: 'manual', 
                     headers: { 
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8'
                     }
                 });
 
                 let urlFinal = tkResponse.headers.get('location') || username;
+                
                 if (urlFinal.startsWith('/')) {
                     const urlObjBase = new URL(username);
                     urlFinal = urlObjBase.origin + urlFinal;
@@ -57,73 +68,64 @@ module.exports = async (req, res) => {
                 const pageRes = await fetch(urlFinal, {
                     headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1' }
                 });
+                
                 const pageHtml = pageRes.ok ? await pageRes.text() : '';
                 const urlObj = new URL(urlFinal);
 
-                // Tokens de Rastreamento (Identificação Base do Remetente)
-                const shareUid = urlObj.searchParams.get('share_uid') || urlObj.searchParams.get('user_id') || null;
-                const senderDevice = urlObj.searchParams.get('sender_device') || urlObj.searchParams.get('_r') || 'Desconhecido';
+                // Captura de IDs de rastreamento do Remetente (Quem gerou o link de envio)
+                const shareUid = urlObj.searchParams.get('share_uid') || urlObj.searchParams.get('user_id') || 'Não embutido na URL (Copiado de forma limpa pelo browser)';
+                const senderDevice = urlObj.searchParams.get('sender_device') || urlObj.searchParams.get('_r') || 'Não detectado';
+                const shareApp = urlObj.searchParams.get('share_app_id') || 'TikTok Mobile App';
                 
-                // Extração do Dono do Vídeo (Autor)
-                const creatorNickMatch = pageHtml.match(/"uniqueId":"([^"]+)"/) || pageHtml.match(/@([a-zA-Z0-9_\.]+)/);
+                // Extração Cirúrgica do Criador do Conteúdo via Metatags do DOM do TikTok
                 const creatorNameMatch = pageHtml.match(/"authorName":"([^"]+)"/) || pageHtml.match(/<meta property="og:title" content="([^"]+)/);
+                const creatorNickMatch = pageHtml.match(/"uniqueId":"([^"]+)"/) || pageHtml.match(/@([a-zA-Z0-9_\.]+)/);
                 const authorAvatarMatch = pageHtml.match(/"avatarLarger":"([^"]+)"/) || pageHtml.match(/"avatarThumb":"([^"]+)"/);
+                
+                const donoDoVideoNick = creatorNickMatch ? creatorNickMatch[1].split('/')[0] : (urlFinal.split('@')[1]?.split('/')[0] || "Desconhecido");
+                const donoDoVideoNome = creatorNameMatch ? creatorNameMatch[1].split(' no TikTok')[0] : "Não indexado";
+                let donoAvatar = authorAvatarMatch ? authorAvatarMatch[1].replace(/\\u002F/g, '/') : "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y";
 
-                const donoNick = creatorNickMatch ? creatorNickMatch[1].split('/')[0] : "Desconhecido";
-                const donoNome = creatorNameMatch ? creatorNameMatch[1].split(' no TikTok')[0] : "Não indexado";
-                const donoAvatar = authorAvatarMatch ? authorAvatarMatch[1].replace(/\\u002F/g, '/') : "https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp";
-
-                // Investigação Avançada do Remetente (Quem enviou) via Endpoints Públicos de Rastreamento
                 let dadosRemetente = {
-                    id: shareUid || "Não embutido na URL (Link limpo)",
-                    username: "Não decodificado (Requer login de sessão)",
-                    nickname: "Conta que gerou o token",
-                    status: shareUid ? "ID Localizado no Token de Compartilhamento" : "Indisponível (Copiado via Browser/Sem Vinculo)"
+                    nickname: "Conta do Remetente (Assinatura do Token)",
+                    status: shareUid !== null && !shareUid.includes('Não') ? "ID Ativo Localizado na URL" : "Indisponível (Sem metadados de compartilhamento originários)"
                 };
 
-                if (shareUid) {
-                    try {
-                        // Faz uma busca indireta na tentativa de capturar dados públicos associados ao ID de rastreio
-                        const senderFetch = await fetch(`https://www.tiktok.com/node/share/user/@id:${shareUid}`, {
-                            headers: { 'User-Agent': 'Mozilla/5.0' }
-                        });
-                        if (senderFetch.ok) {
-                            const senderHtml = await senderFetch.text();
-                            const sName = senderHtml.match(/"nickname":"([^"]+)"/);
-                            if (sName) dadosRemetente.nickname = sName[1];
-                        }
-                    } catch(e){}
-                }
-
-                // Retorna um JSON tipado estruturalmente diferente para o Frontend notar
                 return res.status(200).json({
-                    isTikTokLink: true,
+                    username: "Modulo_TikTok_OSINT_Pro",
                     scanTime: new Date().toLocaleString('pt-BR'),
-                    videoData: {
+                    isTikTokLink: true,
+                    tiktok: {
                         urlOriginal: username,
                         urlExpandida: urlFinal,
+                        donoDoVideo: donoDoVideoNick,
+                        nomeExibicaoDono: donoDoVideoNome,
+                        avatarDono: donoAvatar,
                         videoId: urlFinal.split('/video/')[1]?.split('?')[0] || "Não extraído",
-                        autor: {
-                            username: donoNick,
-                            nome: donoNome,
-                            avatar: donoAvatar
+                        vinculoAmigo: {
+                            share_uid_remetente: shareUid,
+                            device_tracking_code: senderDevice,
+                            plataformaOrigem: shareApp,
+                            nomeIdentificado: dadosRemetente.nickname,
+                            statusAnalise: dadosRemetente.status
                         }
-                    },
-                    remetente: {
-                        uid: dadosRemetente.id,
-                        dispositivo: senderDevice,
-                        nomeIdentificado: dadosRemetente.nickname,
-                        statusAnalise: dadosRemetente.status
                     }
                 });
-
             } catch (err) {
-                return res.status(500).json({ error: 'Falha crítica ao rastrear link do TikTok.', detalhes: err.message });
+                return res.status(500).json({ error: 'Erro de engenharia ao desmembrar metadados do TikTok.', detalhes: err.message });
             }
         }
 
-        // [MÓDULO TRADICIONAL GAMER]
-        let cleanUserLower = username.toLowerCase().replace('@', '').replace(/\//g, '').trim();
+        // [MÓDULO TRADICIONAL] - Steam, GitHub e Footprint de Redes Sociais
+        let cleanUserLower = username.toLowerCase();
+        if (cleanUserLower.includes('steamcommunity.com')) {
+            const match = cleanUserLower.match(/(?:id|profiles)\/([a-z0-9_]+)/i);
+            if (match && match[1]) cleanUserLower = match[1];
+        }
+        cleanUserLower = cleanUserLower.replace('@', '').replace(/\//g, '').trim();
+
+        if (!cleanUserLower) return res.status(400).json({ error: 'Digite um nickname ou ID válido.' });
+
         try {
             let steamData = { found: false, gamesList: [], aliasesHistory: [] };
             let steamID = null;
@@ -131,65 +133,4 @@ module.exports = async (req, res) => {
             if (/^\d+$/.test(cleanUserLower) && cleanUserLower.length >= 16) {
                 steamID = cleanUserLower;
             } else {
-                const resolveRes = await fetch(`https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${STEAM_API_KEY}&vanityurl=${cleanUserLower}`);
-                const resolveData = await resolveRes.json();
-                if (resolveData.response && resolveData.response.success === 1) steamID = resolveData.response.steamid;
-            }
-
-            if (steamID) {
-                const userRes = await fetch(`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${STEAM_API_KEY}&steamids=${steamID}`);
-                const userData = await userRes.json();
-
-                if (userData.response && userData.response.players && userData.response.players.length > 0) {
-                    const player = userData.response.players[0];
-                    const isPublic = player.communityvisibilitystate === 3;
-                    let aliasesHistory = [];
-
-                    // Captura agressiva de nicks antigos
-                    try {
-                        const profilePageRes = await fetch(`https://steamcommunity.com/profiles/${steamID}`, {
-                            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36', 'Accept-Language': 'pt-BR,pt' }
-                        });
-                        if (profilePageRes.ok) {
-                            const htmlText = await profilePageRes.text();
-                            const scriptAliasMatch = htmlText.match(/UserYouAreViewing\.SetOldAliases\(\s*(\[[ \t]*\{[\s\S]*?\}]);/);
-                            if (scriptAliasMatch && scriptAliasMatch[1]) {
-                                aliasesHistory = JSON.parse(scriptAliasMatch[1]).map(i => i.newname);
-                            }
-                            if (aliasesHistory.length === 0) {
-                                const rawBlockMatches = htmlText.match(/class="prev_profile_name">([\s\S]*?)<\/span>/g);
-                                if (rawBlockMatches) aliasesHistory = rawBlockMatches.map(m => m.replace(/<[^>]*>/g, '').trim());
-                            }
-                        }
-                    } catch (e){}
-
-                    if (aliasesHistory.length === 0) aliasesHistory = ["Nenhum histórico armazenado ou perfil limpo"];
-
-                    let gamesList = [];
-                    let gameCount = "Privado";
-                    if (isPublic) {
-                        const gamesRes = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${STEAM_API_KEY}&steamid=${steamID}&include_appinfo=1`);
-                        const gamesData = await gamesRes.json();
-                        if (gamesData.response && gamesData.response.games) {
-                            gameCount = `${gamesData.response.game_count} jogos`;
-                            gamesList = gamesData.response.games.map(g => ({ name: g.name, playtime: `${Math.round(g.playtime_forever / 60)}h` }));
-                        }
-                    }
-
-                    steamData = {
-                        found: true, steamID, personaName: player.personaname, realName: player.realname || "Não informado",
-                        avatar: player.avatarfull, country: player.loccountrycode || "Não informado",
-                        privacy: isPublic ? "🟢 PERFIL PÚBLICO" : "🔴 PERFIL PRIVADO", status: player.personastate === 0 ? "Offline" : "Online",
-                        gameCount, gamesList, aliasesHistory
-                    };
-                }
-            }
-
-            return res.status(200).json({
-                isTikTokLink: false, username: cleanUserLower, steam: steamData,
-                footprint: [], manualLinks: { instagram: `https://instagram.com/${cleanUserLower}`, twitterX: `https://x.com/${cleanUserLower}` }
-            });
-        } catch (e) { return res.status(500).json({ error: 'Erro no processamento OSINT.' }); }
-    }
-    return res.status(404).json({ error: 'Rota não encontrada.' });
-};
+                try {
